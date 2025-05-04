@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "focus-emty-space-writer"
+version = "0.1.0"
+description = "A minimalistic, distraction-free markdown note-taking application"
+authors = ["petr <ermolinskiy.pb15@physics.msu.ru>"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.13"
+customtkinter = "^5.2.2"
+markdown = "^3.8"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+focus-emty-space-writer = "src.main:main" 
