@@ -18,6 +18,11 @@ class FocusSpace(ctk.CTk):
         self.title("Empty Focus Space")
         self.geometry("800x600")
         
+        # Set application icon
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icon.ico')
+        if os.path.exists(icon_path):
+            self.iconbitmap(icon_path)
+        
         # Set appearance mode and theme
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")

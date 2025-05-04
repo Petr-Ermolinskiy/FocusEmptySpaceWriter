@@ -7,9 +7,14 @@ readme = "README.md"
 packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
-python = ">=3.13"
+python = ">=3.12,<3.13"
 customtkinter = "^5.2.2"
 markdown = "^3.8"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pyinstaller = "^6.3.0"
+pillow = "^10.2.0"
 
 [build-system]
 requires = ["poetry-core"]

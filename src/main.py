@@ -1,4 +1,4 @@
-from .FocusSpace import FocusSpace
+from src.FocusSpace import FocusSpace
 
 def main():
     app = FocusSpace()

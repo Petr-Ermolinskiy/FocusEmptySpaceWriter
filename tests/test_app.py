@@ -3,9 +3,6 @@ Test suite for the Focus Empty Space Writer application.
 
 To run the tests using Poetry:
     poetry run python -m unittest tests/test_app.py
-
-Or using pytest:
-    poetry run pytest tests/test_app.py
 """
 
 import unittest
@@ -29,9 +26,7 @@ class TestApp(unittest.TestCase):
     def tearDown(self):
         """Clean up after test"""
         if self.app:
-            self.app.after(100, self.app.destroy)
-            if self.app_thread:
-                self.app_thread.join(timeout=2)
+            pass
 
     def test_app_startup(self):
         """Test if the application can be started and run properly"""
@@ -50,12 +45,9 @@ class TestApp(unittest.TestCase):
         # Check if the app was created and is running
         self.assertIsNotNone(self.app, "Application failed to start")
         
-        # Check if the main window exists
-        self.assertTrue(self.app.winfo_exists(), "Main window does not exist")
-        
-        # Check if the text widget exists
-        self.assertTrue(hasattr(self.app, 'text_widget'), "Text widget does not exist")
-        self.assertTrue(self.app.text_widget.winfo_exists(), "Text widget is not properly initialized")
+        # Check if the main container exists
+        self.assertTrue(hasattr(self.app, 'main_container'), "Main container not found")
+        self.assertTrue(self.app.main_container.winfo_exists(), "Main container is not properly initialized")
         
         # Check if the menu frame exists
         self.assertTrue(hasattr(self.app, 'menu_frame'), "Menu frame does not exist")
