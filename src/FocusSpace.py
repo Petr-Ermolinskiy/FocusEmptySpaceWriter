@@ -129,95 +129,69 @@ class FocusSpace(ctk.CTk):
         )
         self.increase_font.pack(side="left", padx=self.settings["layout"]["menu_padding"])
         
-        # Top margin controls
-        self.top_margin = self.settings["layout"]["top_margin"]
+        # Add margin control buttons
         self.top_margin_label = ctk.CTkLabel(
-            self.menu_frame, 
-            text=f"Top Margin: {self.top_margin}",
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            text_color=self.settings["appearance"]["text_color"]
+            self.menu_frame,
+            text=f"Top Margin: {self.settings['layout']['top_margin']}px",
+            width=120
         )
         self.top_margin_label.pack(side="left", padx=self.settings["layout"]["menu_padding"])
         
-        self.decrease_top_margin = ctk.CTkButton(
-            self.menu_frame,
-            text="-",
-            width=30,
-            command=self.decrease_top_margin,
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            hover_color=self.settings["appearance"]["button_hover_color"]
-        )
-        self.decrease_top_margin.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.increase_top_margin = ctk.CTkButton(
+        self.increase_top_margin_btn = ctk.CTkButton(
             self.menu_frame,
             text="+",
             width=30,
-            command=self.increase_top_margin,
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            hover_color=self.settings["appearance"]["button_hover_color"]
+            command=self.increase_top_margin_func
         )
-        self.increase_top_margin.pack(side="left", padx=self.settings["layout"]["menu_padding"])
+        self.increase_top_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
         
-        # Left margin controls
-        self.left_margin = self.settings["layout"]["left_margin"]
+        self.decrease_top_margin_btn = ctk.CTkButton(
+            self.menu_frame,
+            text="-",
+            width=30,
+            command=self.decrease_top_margin_func
+        )
+        self.decrease_top_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
+        
         self.left_margin_label = ctk.CTkLabel(
-            self.menu_frame, 
-            text=f"Left Margin: {self.left_margin}",
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            text_color=self.settings["appearance"]["text_color"]
+            self.menu_frame,
+            text=f"Left Margin: {self.settings['layout']['left_margin']}px",
+            width=120
         )
         self.left_margin_label.pack(side="left", padx=self.settings["layout"]["menu_padding"])
         
-        self.decrease_left_margin = ctk.CTkButton(
-            self.menu_frame,
-            text="-",
-            width=30,
-            command=self.decrease_left_margin,
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            hover_color=self.settings["appearance"]["button_hover_color"]
-        )
-        self.decrease_left_margin.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.increase_left_margin = ctk.CTkButton(
+        self.increase_left_margin_btn = ctk.CTkButton(
             self.menu_frame,
             text="+",
             width=30,
-            command=self.increase_left_margin,
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            hover_color=self.settings["appearance"]["button_hover_color"]
+            command=self.increase_left_margin_func
         )
-        self.increase_left_margin.pack(side="left", padx=self.settings["layout"]["menu_padding"])
+        self.increase_left_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
         
-        # Create text container with margins
-        self.text_container = ctk.CTkFrame(
-            self.main_container, 
-            fg_color=self.settings["appearance"]["background_color"]
+        self.decrease_left_margin_btn = ctk.CTkButton(
+            self.menu_frame,
+            text="-",
+            width=30,
+            command=self.decrease_left_margin_func
         )
-        self.text_container.pack(
-            fill="both", 
-            expand=True, 
-            padx=(self.left_margin, 10), 
-            pady=(self.top_margin, 10)
-        )
+        self.decrease_left_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
         
-        # Create text widget
+        # Create text widget with margins
         self.text_widget = ctk.CTkTextbox(
-            self.text_container,
+            self.main_container,
+            wrap="word",
             font=(self.settings["text"]["default_font"], self.settings["text"]["default_font_size"]),
             fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            wrap="word"
+            text_color=self.settings["appearance"]["text_color"]
         )
-        self.text_widget.pack(fill="both", expand=True)
+        self.text_widget.pack(fill="both", expand=True, padx=self.settings["layout"]["left_margin"], pady=self.settings["layout"]["top_margin"])
+        
+        # Configure cursor color and blink rate using the underlying Tkinter text widget
+        self.text_widget._textbox.configure(
+            insertbackground=self.settings["appearance"]["cursor_color"],
+            insertontime=self.settings["appearance"]["cursor_blink_on_time"],
+            insertofftime=self.settings["appearance"]["cursor_blink_off_time"]
+        )
         
         # Current file path
         self.current_file = None
@@ -228,6 +202,10 @@ class FocusSpace(ctk.CTk):
         self.bind(self.settings["shortcuts"]["toggle_fullscreen"], self.toggle_fullscreen)
         self.bind(self.settings["shortcuts"]["increase_font"], lambda e: self.increase_font_size())
         self.bind(self.settings["shortcuts"]["decrease_font"], lambda e: self.decrease_font_size())
+        self.bind(self.settings["shortcuts"]["increase_top_margin"], lambda e: self.increase_top_margin_func())
+        self.bind(self.settings["shortcuts"]["decrease_top_margin"], lambda e: self.decrease_top_margin_func())
+        self.bind(self.settings["shortcuts"]["increase_left_margin"], lambda e: self.increase_left_margin_func())
+        self.bind(self.settings["shortcuts"]["decrease_left_margin"], lambda e: self.decrease_left_margin_func())
         
         # Bind mouse events for showing/hiding controls
         self.bind("<Motion>", self.handle_mouse_motion)
@@ -314,37 +292,36 @@ class FocusSpace(ctk.CTk):
         self.text_widget.configure(font=(current_font, self.font_size))
         self.font_size_label.configure(text=f"Font Size: {self.font_size}")
         
-    def decrease_top_margin(self):
-        """Decrease the top margin of the text container."""
-        if self.top_margin > 0:
-            self.top_margin -= 10
-            self.update_top_margin()
+    def increase_top_margin_func(self):
+        """Increase the top margin"""
+        self.settings["layout"]["top_margin"] += 10
+        self.update_margins()
+        
+    def decrease_top_margin_func(self):
+        """Decrease the top margin"""
+        if self.settings["layout"]["top_margin"] > 10:
+            self.settings["layout"]["top_margin"] -= 10
+            self.update_margins()
             
-    def increase_top_margin(self):
-        """Increase the top margin of the text container."""
-        self.top_margin += 10
-        self.update_top_margin()
+    def increase_left_margin_func(self):
+        """Increase the left margin"""
+        self.settings["layout"]["left_margin"] += 10
+        self.update_margins()
         
-    def update_top_margin(self):
-        """Update the top margin of the text container and the label."""
-        self.text_container.pack_configure(pady=(self.top_margin, 10))
-        self.top_margin_label.configure(text=f"Top Margin: {self.top_margin}")
-        
-    def decrease_left_margin(self):
-        """Decrease the left margin of the text container."""
-        if self.left_margin > 0:
-            self.left_margin -= 10
-            self.update_left_margin()
+    def decrease_left_margin_func(self):
+        """Decrease the left margin"""
+        if self.settings["layout"]["left_margin"] > 10:
+            self.settings["layout"]["left_margin"] -= 10
+            self.update_margins()
             
-    def increase_left_margin(self):
-        """Increase the left margin of the text container."""
-        self.left_margin += 10
-        self.update_left_margin()
-        
-    def update_left_margin(self):
-        """Update the left margin of the text container and the label."""
-        self.text_container.pack_configure(padx=(self.left_margin, 10))
-        self.left_margin_label.configure(text=f"Left Margin: {self.left_margin}")
+    def update_margins(self):
+        """Update the text widget margins and labels"""
+        self.text_widget.pack_configure(
+            padx=self.settings["layout"]["left_margin"],
+            pady=self.settings["layout"]["top_margin"]
+        )
+        self.top_margin_label.configure(text=f"Top Margin: {self.settings['layout']['top_margin']}px")
+        self.left_margin_label.configure(text=f"Left Margin: {self.settings['layout']['left_margin']}px")
         
     def toggle_fullscreen(self, event=None):
         """Toggle fullscreen mode."""

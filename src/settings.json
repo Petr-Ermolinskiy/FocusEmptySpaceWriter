@@ -2,7 +2,10 @@
     "appearance": {
         "background_color": "white",
         "text_color": "black",
-        "button_hover_color": "#f0f0f0"
+        "button_hover_color": "#f0f0f0",
+        "cursor_color": "blue",
+        "cursor_blink_on_time": 1000,
+        "cursor_blink_off_time": 0
     },
     "text": {
         "default_font": "Consolas",
@@ -24,6 +27,10 @@
         "decrease_font": "<Control-[>",
         "toggle_fullscreen": "<Escape>",
         "open_file": "<Control-o>",
-        "save_file": "<Control-s>"
+        "save_file": "<Control-s>",
+        "increase_top_margin": "<Control-t>",
+        "decrease_top_margin": "<Control-y>",
+        "increase_left_margin": "<Control-l>",
+        "decrease_left_margin": "<Control-k>"
     }
 } 
