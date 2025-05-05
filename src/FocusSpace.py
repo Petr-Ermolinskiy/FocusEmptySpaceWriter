@@ -15,7 +15,7 @@ class FocusSpace(ctk.CTk):
         self.available_fonts = sorted(font.families())
         
         # Configure window
-        self.title("Empty Focus Space")
+        self.title("Focus Empty Space Writer")
         self.geometry("800x600")
         
         # Set application icon
