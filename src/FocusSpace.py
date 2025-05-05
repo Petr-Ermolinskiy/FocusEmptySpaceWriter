@@ -1,8 +1,9 @@
-import customtkinter as ctk
-import markdown
-from tkinter import messagebox, filedialog, font
 import os
 import json
+import markdown
+import customtkinter as ctk
+from tkinter import messagebox, filedialog, font
+
 
 class FocusSpace(ctk.CTk):
     def __init__(self):
