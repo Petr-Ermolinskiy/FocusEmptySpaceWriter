@@ -19,7 +19,6 @@
     "layout": {
         "left_margin": 50,
         "top_margin": 50,
-        "bottom_margin": 20,
         "menu_height": 30,
         "menu_padding": 5,
         "control_panel_padding": 10
