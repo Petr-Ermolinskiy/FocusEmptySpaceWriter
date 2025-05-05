@@ -133,48 +133,68 @@ class FocusSpace(ctk.CTk):
         self.top_margin_label = ctk.CTkLabel(
             self.menu_frame,
             text=f"Top Margin: {self.settings['layout']['top_margin']}px",
-            width=120
+            width=120,
+            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
+            text_color=self.settings["appearance"]["text_color"]
         )
         self.top_margin_label.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.increase_top_margin_btn = ctk.CTkButton(
-            self.menu_frame,
-            text="+",
-            width=30,
-            command=self.increase_top_margin_func
-        )
-        self.increase_top_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
         
         self.decrease_top_margin_btn = ctk.CTkButton(
             self.menu_frame,
             text="-",
             width=30,
-            command=self.decrease_top_margin_func
+            command=self.decrease_top_margin_func,
+            fg_color=self.settings["appearance"]["background_color"],
+            text_color=self.settings["appearance"]["text_color"],
+            hover_color=self.settings["appearance"]["button_hover_color"],
+            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"])
         )
         self.decrease_top_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
+        
+        self.increase_top_margin_btn = ctk.CTkButton(
+            self.menu_frame,
+            text="+",
+            width=30,
+            command=self.increase_top_margin_func,
+            fg_color=self.settings["appearance"]["background_color"],
+            text_color=self.settings["appearance"]["text_color"],
+            hover_color=self.settings["appearance"]["button_hover_color"],
+            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"])
+        )
+        self.increase_top_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
         
         self.left_margin_label = ctk.CTkLabel(
             self.menu_frame,
             text=f"Left Margin: {self.settings['layout']['left_margin']}px",
-            width=120
+            width=120,
+            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
+            text_color=self.settings["appearance"]["text_color"]
         )
         self.left_margin_label.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.increase_left_margin_btn = ctk.CTkButton(
-            self.menu_frame,
-            text="+",
-            width=30,
-            command=self.increase_left_margin_func
-        )
-        self.increase_left_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
         
         self.decrease_left_margin_btn = ctk.CTkButton(
             self.menu_frame,
             text="-",
             width=30,
-            command=self.decrease_left_margin_func
+            command=self.decrease_left_margin_func,
+            fg_color=self.settings["appearance"]["background_color"],
+            text_color=self.settings["appearance"]["text_color"],
+            hover_color=self.settings["appearance"]["button_hover_color"],
+            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"])
         )
         self.decrease_left_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
+        
+        self.increase_left_margin_btn = ctk.CTkButton(
+            self.menu_frame,
+            text="+",
+            width=30,
+            command=self.increase_left_margin_func,
+            fg_color=self.settings["appearance"]["background_color"],
+            text_color=self.settings["appearance"]["text_color"],
+            hover_color=self.settings["appearance"]["button_hover_color"],
+            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"])
+        )
+        self.increase_left_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
         
         # Create text widget with margins
         self.text_widget = ctk.CTkTextbox(
@@ -190,7 +210,8 @@ class FocusSpace(ctk.CTk):
         self.text_widget._textbox.configure(
             insertbackground=self.settings["appearance"]["cursor_color"],
             insertontime=self.settings["appearance"]["cursor_blink_on_time"],
-            insertofftime=self.settings["appearance"]["cursor_blink_off_time"]
+            insertofftime=self.settings["appearance"]["cursor_blink_off_time"],
+            insertwidth=self.settings["appearance"]["cursor_width"]
         )
         
         # Current file path
