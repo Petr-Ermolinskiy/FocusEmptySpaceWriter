@@ -204,7 +204,12 @@ class FocusSpace(ctk.CTk):
             fg_color=self.settings["appearance"]["background_color"],
             text_color=self.settings["appearance"]["text_color"]
         )
-        self.text_widget.pack(fill="both", expand=True, padx=self.settings["layout"]["left_margin"], pady=self.settings["layout"]["top_margin"])
+        self.text_widget.pack(
+            fill="both", 
+            expand=True, 
+            padx=self.settings["layout"]["left_margin"], 
+            pady=(self.settings["layout"]["top_margin"], self.settings["layout"]["bottom_margin"])
+        )
         
         # Configure cursor color and blink rate using the underlying Tkinter text widget
         self.text_widget._textbox.configure(
@@ -339,7 +344,7 @@ class FocusSpace(ctk.CTk):
         """Update the text widget margins and labels"""
         self.text_widget.pack_configure(
             padx=self.settings["layout"]["left_margin"],
-            pady=self.settings["layout"]["top_margin"]
+            pady=(self.settings["layout"]["top_margin"], self.settings["layout"]["bottom_margin"])
         )
         self.top_margin_label.configure(text=f"Top Margin: {self.settings['layout']['top_margin']}px")
         self.left_margin_label.configure(text=f"Left Margin: {self.settings['layout']['left_margin']}px")
