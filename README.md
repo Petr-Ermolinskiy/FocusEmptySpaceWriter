@@ -1,32 +1,43 @@
 # Focus Empty Space Writer
 
-A minimalistic, distraction-free markdown note-taking application.
+A distraction-free writing environment built with Python and customtkinter.
+
+![The window of app](images/window.png)
 
 ## Features
 
-- Full-screen mode for maximum focus
-- Clean, minimalistic interface
-- Adjustable font size
-- Cursor position highlighting
+- Clean, minimalist interface
+- Customizable margins
+- Font size and family controls
 - Markdown support
-- Escape key to toggle fullscreen mode
+- Fullscreen mode
+- Keyboard shortcuts for quick access to features
+
+## Keyboard Shortcuts
+
+| Action | Shortcut |
+|--------|----------|
+| Open File | `Ctrl + O` |
+| Save File | `Ctrl + S` |
+| Toggle Fullscreen | `Escape` |
+| Increase Font Size | `Ctrl + ]` |
+| Decrease Font Size | `Ctrl + [` |
+| Increase Top Margin | `Ctrl + J` |
+| Decrease Top Margin | `Ctrl + K` |
+| Increase Left Margin | `Ctrl + L` |
+| Decrease Left Margin | `Ctrl + H` |
 
 ## Installation
 
-1. Make sure you have Python 3.8+ installed
-2. Install Poetry if you haven't already:
-   ```bash
-   pip install poetry
-   ```
-3. Clone this repository
-4. Navigate to the project directory and install dependencies:
+1. Clone the repository
+2. Install dependencies:
    ```bash
    poetry install
    ```
 
 ## Usage
 
-To start the application, you can use either of these methods:
+You can run the application in two ways:
 
 1. Using Poetry:
    ```bash
@@ -38,24 +49,19 @@ To start the application, you can use either of these methods:
    poetry run python src/main.py
    ```
 
-### Controls
+## Building
 
-- `+` and `-` buttons: Adjust font size
-- `Escape`: Toggle fullscreen mode
-- The cursor position is highlighted briefly when typing
+To build the application for your platform:
+
+  ```bash
+  make build
+  ```
+
 
 ## Development
 
-The project uses Poetry for dependency management and follows a standard Python package structure:
-
-```
-focus-emty-space-writer/
-├── src/
-│   └── main.py
-├── pyproject.toml
-└── README.md
-```
+The project uses Poetry for dependency management. Make sure you have Poetry installed before contributing.
 
 ## License
 
-MIT License
+This project is licensed under the MIT License - see the LICENSE file for details.
