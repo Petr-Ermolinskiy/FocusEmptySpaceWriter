@@ -7,3 +7,6 @@
 *.pywz
 *.exe
 /dist
+/build
+.venv/
+.DS_Store
