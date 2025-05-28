@@ -6,8 +6,6 @@ To run the tests using Poetry:
 """
 
 import unittest
-import threading
-import time
 import sys
 import os
 
@@ -21,29 +19,20 @@ class TestApp(unittest.TestCase):
     def setUp(self):
         """Set up test environment"""
         self.app = None
-        self.app_thread = None
 
     def tearDown(self):
         """Clean up after test"""
         if self.app:
-            pass
+            self.app.destroy()
+            self.app = None
 
-    def test_app_startup(self):
-        """Test if the application can be started and run properly"""
-        def run_app():
-            self.app = FocusSpace()
-            self.app.mainloop()
-
-        # Start the app in a separate thread
-        self.app_thread = threading.Thread(target=run_app)
-        self.app_thread.daemon = True
-        self.app_thread.start()
-
-        # Wait for the app to initialize
-        time.sleep(1)
-
-        # Check if the app was created and is running
-        self.assertIsNotNone(self.app, "Application failed to start")
+    def test_app_initialization(self):
+        """Test if the application can be initialized properly"""
+        # Create the app instance
+        self.app = FocusSpace()
+        
+        # Check if the app was created
+        self.assertIsNotNone(self.app, "Application failed to initialize")
         
         # Check if the main container exists
         self.assertTrue(hasattr(self.app, 'main_container'), "Main container not found")
@@ -63,4 +52,4 @@ class TestApp(unittest.TestCase):
         self.assertTrue(len(self.app.available_fonts) > 0, "No fonts were loaded")
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()
