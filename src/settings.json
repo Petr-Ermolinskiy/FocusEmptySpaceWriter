@@ -6,7 +6,12 @@
         "cursor_color": "blue",
         "cursor_blink_on_time": 1000,
         "cursor_blink_off_time": 0,
-        "cursor_width": 3
+        "cursor_width": 3,
+        "dark_mode": {
+            "background_color": "#1a1a1a",
+            "text_color": "white",
+            "button_hover_color": "#333333"
+        }
     },
     "text": {
         "default_font": "Consolas",
@@ -32,6 +37,7 @@
         "increase_top_margin": "<Control-j>",
         "decrease_top_margin": "<Control-k>",
         "increase_left_margin": "<Control-l>",
-        "decrease_left_margin": "<Control-h>"
+        "decrease_left_margin": "<Control-h>",
+        "toggle_dark_mode": "<Control-d>"
     }
 } 

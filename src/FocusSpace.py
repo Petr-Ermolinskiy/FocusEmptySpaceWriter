@@ -12,6 +12,9 @@ class FocusSpace(ctk.CTk):
         # Load settings
         self.settings = self.load_settings()
         
+        # Initialize dark mode state
+        self.is_dark_mode = False
+        
         # Get system fonts
         self.available_fonts = sorted(font.families())
         
@@ -228,6 +231,7 @@ class FocusSpace(ctk.CTk):
         self.bind(self.settings["shortcuts"]["decrease_top_margin"], lambda e: self.decrease_top_margin_func())
         self.bind(self.settings["shortcuts"]["increase_left_margin"], lambda e: self.increase_left_margin_func())
         self.bind(self.settings["shortcuts"]["decrease_left_margin"], lambda e: self.decrease_left_margin_func())
+        self.bind(self.settings["shortcuts"]["toggle_dark_mode"], lambda e: self.toggle_dark_mode())
         
         # Bind mouse events for showing/hiding controls
         self.bind("<Motion>", self.handle_mouse_motion)
@@ -347,4 +351,75 @@ class FocusSpace(ctk.CTk):
         
     def toggle_fullscreen(self, event=None):
         """Toggle fullscreen mode."""
-        self.attributes("-fullscreen", not self.attributes("-fullscreen")) 
+        self.attributes("-fullscreen", not self.attributes("-fullscreen"))
+        
+    def toggle_dark_mode(self):
+        """Toggle between light and dark mode."""
+        self.is_dark_mode = not self.is_dark_mode
+        
+        if self.is_dark_mode:
+            # Apply dark mode colors
+            self.configure(fg_color=self.settings["appearance"]["dark_mode"]["background_color"])
+            self.main_container.configure(fg_color=self.settings["appearance"]["dark_mode"]["background_color"])
+            self.menu_frame.configure(fg_color=self.settings["appearance"]["dark_mode"]["background_color"])
+            self.text_widget.configure(
+                fg_color=self.settings["appearance"]["dark_mode"]["background_color"],
+                text_color=self.settings["appearance"]["dark_mode"]["text_color"]
+            )
+            
+            # Update all widgets in menu frame
+            for widget in self.menu_frame.winfo_children():
+                if isinstance(widget, ctk.CTkLabel):
+                    widget.configure(
+                        fg_color=self.settings["appearance"]["dark_mode"]["background_color"],
+                        text_color=self.settings["appearance"]["dark_mode"]["text_color"]
+                    )
+                elif isinstance(widget, ctk.CTkButton):
+                    widget.configure(
+                        fg_color=self.settings["appearance"]["dark_mode"]["background_color"],
+                        text_color=self.settings["appearance"]["dark_mode"]["text_color"],
+                        hover_color=self.settings["appearance"]["dark_mode"]["button_hover_color"]
+                    )
+                elif isinstance(widget, ctk.CTkComboBox):
+                    widget.configure(
+                        fg_color=self.settings["appearance"]["dark_mode"]["background_color"],
+                        text_color=self.settings["appearance"]["dark_mode"]["text_color"],
+                        button_color=self.settings["appearance"]["dark_mode"]["background_color"],
+                        button_hover_color=self.settings["appearance"]["dark_mode"]["button_hover_color"],
+                        dropdown_fg_color=self.settings["appearance"]["dark_mode"]["background_color"],
+                        dropdown_text_color=self.settings["appearance"]["dark_mode"]["text_color"],
+                        dropdown_hover_color=self.settings["appearance"]["dark_mode"]["button_hover_color"]
+                    )
+        else:
+            # Apply light mode colors
+            self.configure(fg_color=self.settings["appearance"]["background_color"])
+            self.main_container.configure(fg_color=self.settings["appearance"]["background_color"])
+            self.menu_frame.configure(fg_color=self.settings["appearance"]["background_color"])
+            self.text_widget.configure(
+                fg_color=self.settings["appearance"]["background_color"],
+                text_color=self.settings["appearance"]["text_color"]
+            )
+            
+            # Update all widgets in menu frame
+            for widget in self.menu_frame.winfo_children():
+                if isinstance(widget, ctk.CTkLabel):
+                    widget.configure(
+                        fg_color=self.settings["appearance"]["background_color"],
+                        text_color=self.settings["appearance"]["text_color"]
+                    )
+                elif isinstance(widget, ctk.CTkButton):
+                    widget.configure(
+                        fg_color=self.settings["appearance"]["background_color"],
+                        text_color=self.settings["appearance"]["text_color"],
+                        hover_color=self.settings["appearance"]["button_hover_color"]
+                    )
+                elif isinstance(widget, ctk.CTkComboBox):
+                    widget.configure(
+                        fg_color=self.settings["appearance"]["background_color"],
+                        text_color=self.settings["appearance"]["text_color"],
+                        button_color=self.settings["appearance"]["background_color"],
+                        button_hover_color=self.settings["appearance"]["button_hover_color"],
+                        dropdown_fg_color=self.settings["appearance"]["background_color"],
+                        dropdown_text_color=self.settings["appearance"]["text_color"],
+                        dropdown_hover_color=self.settings["appearance"]["button_hover_color"]
+                    ) 
