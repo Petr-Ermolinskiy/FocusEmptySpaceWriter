@@ -2,14 +2,26 @@ import os
 import re
 import sys
 import json
-from PySide6.QtCore import Qt, QRegularExpression, QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import (
-    QAction, QActionGroup, QColor, QFont, QFontDatabase, QKeySequence,
-    QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
+    QAction,
+    QActionGroup,
+    QColor,
+    QFont,
+    QFontDatabase,
+    QKeySequence,
+    QSyntaxHighlighter,
+    QTextCharFormat,
+    QTextCursor,
 )
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QMainWindow, QMessageBox,
-    QTextEdit, QWidget, QVBoxLayout,
+    QApplication,
+    QFileDialog,
+    QMainWindow,
+    QMessageBox,
+    QTextEdit,
+    QWidget,
+    QVBoxLayout,
 )
 
 
@@ -17,22 +29,6 @@ from PySide6.QtWidgets import (
 # Helpers
 # ----------------------------------------------------------------------
 HEADING_SCALE = {1: 1.9, 2: 1.55, 3: 1.3, 4: 1.15, 5: 1.05, 6: 1.0}
-MARKERS = ["**", "__", "*", "_", "`", "~~", "#######", "######", "#####",
-           "####", "###", "##", "#"]
-
-
-def _find_enclosing(text, pos, marker):
-    """Return (start, end) of the nearest pair of `marker` around `pos`,
-    or None.  `end` is exclusive and includes the trailing marker."""
-    # Search backwards for opening
-    left = text.rfind(marker, 0, pos)
-    if left == -1:
-        return None
-    # Find the matching close after the opening
-    right = text.find(marker, left + len(marker))
-    if right == -1:
-        return None
-    return left, right + len(marker)
 
 
 # ----------------------------------------------------------------------
@@ -43,10 +39,9 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
     Turns a plain QTextEdit into a live-preview Markdown editor.
 
     - Applies visual styling to headings, bold, italic, code, links, lists.
-    - Hides the structural markers (`**`, `*`, `#`, `` ` ``) by shrinking
-      them to 1 pt and coloring them transparent, UNLESS the cursor is on
-      the same line/block — then markers are shown at normal size so you
-      can edit them.
+    - Hides structural markers (`**`, `*`, `#`, `` ` ``) by shrinking them
+      to 1 pt and coloring them transparent, UNLESS the cursor is on the
+      same block — then markers are shown at normal size so you can edit.
     """
 
     def __init__(self, document, app):
@@ -56,7 +51,6 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
         document.contentsChange.connect(self._on_contents_change)
 
     def _on_contents_change(self, position, chars_removed, chars_added):
-        # Re-highlight on every edit
         self.rehighlight()
 
     def set_cursor_position(self, pos):
@@ -66,9 +60,6 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
     # -- helpers ------------------------------------------------------
     def _base_size(self):
         return self.app.font_size
-
-    def _mono(self):
-        return QFontDatabase.systemFont(QFontDatabase.FixedFont)
 
     def _fmt(self, *, bold=False, italic=False, size=None, color=None,
              mono=False, strike=False, underline=False):
@@ -90,15 +81,12 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
         return f
 
     def _hidden(self):
-        """A format that hides a marker visually but keeps it selectable."""
         f = QTextCharFormat()
         f.setFontPointSize(1)
         f.setForeground(QColor(0, 0, 0, 0))
         return f
 
     def _marker_fmt(self, block_is_active):
-        """Format for a Markdown marker. Hidden if block not active, else
-        shown in a dim color."""
         if not block_is_active:
             return self._hidden()
         f = QTextCharFormat()
@@ -112,7 +100,6 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
         block_pos = block.position()
         block_len = block.length()
 
-        # Is the cursor inside this block?  If yes, show markers.
         active = block_pos <= self._cursor_pos < block_pos + block_len
 
         # ---- Headings ------------------------------------------------
@@ -120,20 +107,17 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
         if m:
             level = len(m.group(1))
             heading_size = base * HEADING_SCALE[level]
-            # Marker format for the `###` prefix
-            self.setFormat(0, len(m.group(1)),
-                           self._marker_fmt(active))
-            # Space after heading marker: hide
+            self.setFormat(0, len(m.group(1)), self._marker_fmt(active))
             self.setFormat(len(m.group(1)), 1, self._hidden())
-            # The heading text
             self.setFormat(len(m.group(0)), len(text) - len(m.group(0)),
                            self._fmt(bold=True, size=heading_size,
                                      color="#569cd6"))
-            return  # headings don't need inline processing
+            return
 
         # ---- Code fence lines ----------------------------------------
         if text.strip().startswith("```"):
-            self.setFormat(0, len(text), self._fmt(mono=True, color="#4ec9b0"))
+            self.setFormat(0, len(text),
+                           self._fmt(mono=True, color="#4ec9b0"))
             return
 
         # ---- Horizontal rule -----------------------------------------
@@ -149,51 +133,41 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
 
         # ---- Blockquote ---------------------------------------------
         if text.lstrip().startswith(">"):
-            self.setFormat(0, len(text), self._fmt(italic=True, color="#6a9955"))
+            self.setFormat(0, len(text),
+                           self._fmt(italic=True, color="#6a9955"))
 
-        # ---- Inline bold / italic / code / links / strike -----------
+        # ---- Inline --------------------------------------------------
         self._highlight_inline(text, active)
 
     def _highlight_inline(self, text, active):
-        base = self._base_size()
-
-        # Order matters: triple before double before single
-        # Bold + italic ***x***
+        # Triple before double before single
         self._apply_pairs(text, "***", active,
                           self._fmt(bold=True, italic=True, color="#ce9178"))
-
-        # Bold **x** / __x__
         self._apply_pairs(text, "**", active,
                           self._fmt(bold=True, color="#ce9178"))
         self._apply_pairs(text, "__", active,
                           self._fmt(bold=True, color="#ce9178"))
 
-        # Italic *x* / _x_  (guard against touching bold ranges)
         self._apply_italic_single(text, "*", active)
         self._apply_italic_single(text, "_", active)
 
-        # Strikethrough ~~x~~
         self._apply_pairs(text, "~~", active,
                           self._fmt(strike=True, color="#808080"))
 
-        # Inline code `x`
         self._apply_code_span(text, active)
 
         # Links [text](url)
         for m in re.finditer(r"\[([^\]]+)\]\(([^)]+)\)", text):
             text_start = m.start() + 1
             text_len = len(m.group(1))
-            # Bracket + text: rendered as link
             self.setFormat(m.start(), 1, self._marker_fmt(active))
             self.setFormat(text_start, text_len,
                            self._fmt(color="#4fc1ff", underline=True))
-            # `](url)` part
             tail_start = text_start + text_len
             tail_len = m.end() - tail_start
             self.setFormat(tail_start, tail_len, self._marker_fmt(active))
 
     def _apply_pairs(self, text, marker, active, content_fmt):
-        """Format `marker content marker` spans, marker hidden/highlighted."""
         ml = len(marker)
         i = 0
         while True:
@@ -203,8 +177,6 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
             end = text.find(marker, start + ml)
             if end == -1:
                 return
-            # Skip if this is actually a longer run (e.g. *** matched by **)
-            # — allow but reduce by checking length
             inner_start = start + ml
             inner_len = end - inner_start
             if inner_len <= 0:
@@ -216,14 +188,12 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
             i = end + ml
 
     def _apply_italic_single(self, text, marker, active):
-        # Only single occurrences not part of a double
         m1 = len(marker)
         i = 0
         while True:
             start = text.find(marker, i)
             if start == -1:
                 return
-            # Not part of "**" or "__" or "***"
             prev = text[start - 1] if start > 0 else ""
             nxt = text[start + 1] if start + 1 < len(text) else ""
             if prev == marker or nxt == marker:
@@ -232,7 +202,6 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
             end = text.find(marker, start + m1)
             if end == -1:
                 return
-            # Skip if closing char part of a double
             prev2 = text[end - 1] if end > 0 else ""
             nxt2 = text[end + 1] if end + 1 < len(text) else ""
             if prev2 == marker and end - 1 != start:
@@ -241,7 +210,6 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
             if nxt2 == marker:
                 i = end + 1
                 continue
-            # Word boundary safety for `_` (don't italicize snake_case)
             if marker == "_":
                 prev_ch = text[start - 1] if start > 0 else " "
                 next_ch = text[end + 1] if end + 1 < len(text) else " "
@@ -262,14 +230,13 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
             start = text.find("`", i)
             if start == -1:
                 return
-            # Skip triple backticks
             if text.startswith("```", start):
                 i = start + 3
                 continue
             end = text.find("`", start + 1)
             if end == -1:
                 return
-            if end == start + 1:  # empty ``
+            if end == start + 1:
                 i = end + 1
                 continue
             self.setFormat(start, 1, self._marker_fmt(active))
@@ -280,7 +247,7 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
 
 
 # ----------------------------------------------------------------------
-# Main window
+# Defaults
 # ----------------------------------------------------------------------
 DEFAULT_SETTINGS = {
     "appearance": {
@@ -302,6 +269,9 @@ DEFAULT_SETTINGS = {
 }
 
 
+# ----------------------------------------------------------------------
+# Main window
+# ----------------------------------------------------------------------
 class FocusSpace(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -321,7 +291,7 @@ class FocusSpace(QMainWindow):
 
         # Single editable pane
         self.editor = QTextEdit()
-        self.editor.setAcceptRichText(False)          # plain text under the hood
+        self.editor.setAcceptRichText(False)
         self.editor.setLineWrapMode(QTextEdit.WidgetWidth)
         layout.addWidget(self.editor)
 
@@ -377,7 +347,7 @@ class FocusSpace(QMainWindow):
         mb = self.menuBar()
         mb.setNativeMenuBar(True)
 
-        # File
+        # ---- File ----
         fm = mb.addMenu("File")
         self._add(fm, "Open…", "Ctrl+O", self.open_file)
         self._add(fm, "Save", "Ctrl+S", self.save_file)
@@ -385,7 +355,7 @@ class FocusSpace(QMainWindow):
         fm.addSeparator()
         self._add(fm, "Quit", "Ctrl+Q", self.close)
 
-        # Edit
+        # ---- Edit ----
         em = mb.addMenu("Edit")
         self._add(em, "Undo", "Ctrl+Z", self.editor.undo)
         self._add(em, "Redo", "Ctrl+Shift+Z", self.editor.redo)
@@ -395,7 +365,7 @@ class FocusSpace(QMainWindow):
         self._add(em, "Paste", "Ctrl+V", self.editor.paste)
         self._add(em, "Select All", "Ctrl+A", self.editor.selectAll)
 
-        # Format
+        # ---- Format ----
         fmt = mb.addMenu("Format")
         self._add(fmt, "Bold", "Ctrl+B", lambda: self._wrap("**"))
         self._add(fmt, "Italic", "Ctrl+I", lambda: self._wrap("*"))
@@ -407,7 +377,7 @@ class FocusSpace(QMainWindow):
         self._add(fmt, "Heading 3", "Ctrl+3", lambda: self._apply_heading(3))
         self._add(fmt, "Body", "Ctrl+0", lambda: self._apply_heading(0))
 
-        # View
+        # ---- View ----
         vm = mb.addMenu("View")
         self._add(vm, "Toggle Fullscreen", "F11", self._toggle_fullscreen)
 
@@ -419,7 +389,20 @@ class FocusSpace(QMainWindow):
 
         vm.addSeparator()
 
-        # Font submenu
+        # ---- Table of Contents submenu ----
+        self.toc_menu = vm.addMenu("Table of Contents")
+        self.toc_menu.aboutToShow.connect(self._populate_toc)
+
+        # A separate action with the shortcut. It opens the TOC as a popup
+        # at the cursor so Ctrl+Shift+O works even without the menu bar.
+        self.toc_shortcut_act = QAction("Show Table of Contents", self)
+        self.toc_shortcut_act.setShortcut(QKeySequence("Ctrl+Shift+O"))
+        self.toc_shortcut_act.triggered.connect(self._show_toc_popup)
+        self.addAction(self.toc_shortcut_act)
+
+        vm.addSeparator()
+
+        # ---- Font submenu ----
         fmenu = vm.addMenu("Font")
         group = QActionGroup(self)
         group.setExclusive(True)
@@ -431,7 +414,7 @@ class FocusSpace(QMainWindow):
             fmenu.addAction(act)
         self._font_group = group
 
-        # Font size submenu
+        # ---- Font size submenu ----
         smenu = vm.addMenu("Font Size")
         self._add(smenu, "Increase", "Ctrl+=", self._increase_font)
         self._add(smenu, "Decrease", "Ctrl+-", self._decrease_font)
@@ -446,14 +429,18 @@ class FocusSpace(QMainWindow):
             smenu.addAction(act)
         self._size_group = sgroup
 
-        # Margins submenu
+        # ---- Margins submenu ----
         mm = vm.addMenu("Margins")
-        self._add(mm, "Increase Top", "Ctrl+Up", lambda: self._nudge_margin("top", +10))
-        self._add(mm, "Decrease Top", "Ctrl+Down", lambda: self._nudge_margin("top", -10))
-        self._add(mm, "Increase Left", "Ctrl+Right", lambda: self._nudge_margin("left", +10))
-        self._add(mm, "Decrease Left", "Ctrl+Left", lambda: self._nudge_margin("left", -10))
+        self._add(mm, "Increase Top", "Ctrl+Up",
+                  lambda: self._nudge_margin("top", +10))
+        self._add(mm, "Decrease Top", "Ctrl+Down",
+                  lambda: self._nudge_margin("top", -10))
+        self._add(mm, "Increase Left", "Ctrl+Right",
+                  lambda: self._nudge_margin("left", +10))
+        self._add(mm, "Decrease Left", "Ctrl+Left",
+                  lambda: self._nudge_margin("left", -10))
 
-        # Help
+        # ---- Help ----
         hm = mb.addMenu("Help")
         self._add(hm, "About", None, self._about)
 
@@ -464,6 +451,111 @@ class FocusSpace(QMainWindow):
         act.triggered.connect(callback)
         menu.addAction(act)
         return act
+
+    # ---- Table of Contents ------------------------------------------
+    def _scan_headings(self):
+        """
+        Return a list of (level, text, char_position) for every ATX
+        heading (`#` .. `######`) and every Setext heading (=== / ---).
+        """
+        doc = self.editor.document()
+        headings = []
+
+        block = doc.begin()
+        prev_line_text = ""
+        prev_line_pos = 0
+
+        while block.isValid():
+            text = block.text()
+            pos = block.position()
+
+            # ATX heading
+            m = re.match(r"^(#{1,6})\s+(.*?)\s*#*\s*$", text)
+            if m:
+                level = len(m.group(1))
+                title = m.group(2).strip()
+                if title:
+                    headings.append((level, title, pos))
+                prev_line_text = text
+                prev_line_pos = pos
+                block = block.next()
+                continue
+
+            # Setext heading
+            if re.fullmatch(r"\s*(=+|-+)\s*", text) and prev_line_text.strip():
+                level = 1 if text.strip().startswith("=") else 2
+                title = prev_line_text.strip()
+                if title:
+                    headings.append((level, title, prev_line_pos))
+                prev_line_text = text
+                prev_line_pos = pos
+                block = block.next()
+                continue
+
+            prev_line_text = text
+            prev_line_pos = pos
+            block = block.next()
+
+        return headings
+
+    def _populate_toc(self):
+        """Clear and rebuild the Table of Contents submenu."""
+        self.toc_menu.clear()
+        headings = self._scan_headings()
+
+        if not headings:
+            empty = QAction("(no headings)", self)
+            empty.setEnabled(False)
+            self.toc_menu.addAction(empty)
+            return
+
+        for level, title, pos in headings:
+            indent = "\u00a0" * ((level - 1) * 4)
+            label = title if len(title) <= 70 else title[:67] + "…"
+            act = QAction(f"{indent}{label}", self)
+            act.triggered.connect(
+                lambda _checked=False, p=pos: self._jump_to_position(p)
+            )
+            self.toc_menu.addAction(act)
+
+        self.toc_menu.addSeparator()
+        copy_act = QAction("Copy TOC as Markdown", self)
+        copy_act.triggered.connect(self._copy_toc_markdown)
+        self.toc_menu.addAction(copy_act)
+
+    def _show_toc_popup(self):
+        """Pop the Table of Contents menu at the cursor position."""
+        self._populate_toc()
+        # Show near the editor cursor
+        pos = self.editor.mapToGlobal(self.editor.cursorRect().bottomLeft())
+        self.toc_menu.popup(pos)
+
+    def _jump_to_position(self, pos):
+        cursor = self.editor.textCursor()
+        cursor.setPosition(pos)
+        cursor.movePosition(QTextCursor.EndOfBlock)
+        self.editor.setTextCursor(cursor)
+        self.editor.ensureCursorVisible()
+        self.editor.setFocus()
+        self._on_cursor_moved()
+
+    def _copy_toc_markdown(self):
+        headings = self._scan_headings()
+        if not headings:
+            return
+        min_level = min(h[0] for h in headings)
+        lines = []
+        for level, title, _ in headings:
+            indent = "  " * (level - min_level)
+            lines.append(f"{indent}- [{title}](#{self._slugify(title)})")
+        QApplication.clipboard().setText("\n".join(lines))
+
+    @staticmethod
+    def _slugify(text):
+        s = text.strip().lower()
+        s = re.sub(r"[^\w\s-]", "", s)
+        s = re.sub(r"\s+", "-", s)
+        return s
 
     # ---- formatting --------------------------------------------------
     def _wrap(self, marker):
@@ -485,7 +577,6 @@ class FocusSpace(QMainWindow):
         cursor.movePosition(QTextCursor.StartOfBlock)
         cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
         text = cursor.selectedText()
-        # Strip existing heading
         text = re.sub(r"^#{1,6}\s+", "", text)
         if level > 0:
             text = "#" * level + " " + text
@@ -586,5 +677,7 @@ class FocusSpace(QMainWindow):
         QMessageBox.about(self, "Focus Empty Space Writer",
                           "Live-preview Markdown editor.\n"
                           "One pane — markers are hidden while you type "
-                          "and appear when your cursor is on them.")
+                          "and appear when your cursor is on them.\n\n"
+                          "View ▸ Table of Contents lists all headings "
+                          "and jumps to them when clicked.")
 
