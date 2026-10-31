@@ -1,425 +1,590 @@
 import os
+import re
+import sys
 import json
-import markdown
-import customtkinter as ctk
-from tkinter import messagebox, filedialog, font
+from PySide6.QtCore import Qt, QRegularExpression, QTimer
+from PySide6.QtGui import (
+    QAction, QActionGroup, QColor, QFont, QFontDatabase, QKeySequence,
+    QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
+)
+from PySide6.QtWidgets import (
+    QApplication, QFileDialog, QMainWindow, QMessageBox,
+    QTextEdit, QWidget, QVBoxLayout,
+)
 
 
-class FocusSpace(ctk.CTk):
+# ----------------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------------
+HEADING_SCALE = {1: 1.9, 2: 1.55, 3: 1.3, 4: 1.15, 5: 1.05, 6: 1.0}
+MARKERS = ["**", "__", "*", "_", "`", "~~", "#######", "######", "#####",
+           "####", "###", "##", "#"]
+
+
+def _find_enclosing(text, pos, marker):
+    """Return (start, end) of the nearest pair of `marker` around `pos`,
+    or None.  `end` is exclusive and includes the trailing marker."""
+    # Search backwards for opening
+    left = text.rfind(marker, 0, pos)
+    if left == -1:
+        return None
+    # Find the matching close after the opening
+    right = text.find(marker, left + len(marker))
+    if right == -1:
+        return None
+    return left, right + len(marker)
+
+
+# ----------------------------------------------------------------------
+# Live-preview Markdown highlighter
+# ----------------------------------------------------------------------
+class LiveMarkdownHighlighter(QSyntaxHighlighter):
+    """
+    Turns a plain QTextEdit into a live-preview Markdown editor.
+
+    - Applies visual styling to headings, bold, italic, code, links, lists.
+    - Hides the structural markers (`**`, `*`, `#`, `` ` ``) by shrinking
+      them to 1 pt and coloring them transparent, UNLESS the cursor is on
+      the same line/block — then markers are shown at normal size so you
+      can edit them.
+    """
+
+    def __init__(self, document, app):
+        super().__init__(document)
+        self.app = app
+        self._cursor_pos = 0
+        document.contentsChange.connect(self._on_contents_change)
+
+    def _on_contents_change(self, position, chars_removed, chars_added):
+        # Re-highlight on every edit
+        self.rehighlight()
+
+    def set_cursor_position(self, pos):
+        self._cursor_pos = pos
+        self.rehighlight()
+
+    # -- helpers ------------------------------------------------------
+    def _base_size(self):
+        return self.app.font_size
+
+    def _mono(self):
+        return QFontDatabase.systemFont(QFontDatabase.FixedFont)
+
+    def _fmt(self, *, bold=False, italic=False, size=None, color=None,
+             mono=False, strike=False, underline=False):
+        f = QTextCharFormat()
+        if bold:
+            f.setFontWeight(QFont.Bold)
+        if italic:
+            f.setFontItalic(True)
+        if size:
+            f.setFontPointSize(size)
+        if color:
+            f.setForeground(QColor(color))
+        if mono:
+            f.setFontFamilies(["Menlo", "Consolas", "Courier New", "monospace"])
+        if strike:
+            f.setFontStrikeOut(True)
+        if underline:
+            f.setFontUnderline(True)
+        return f
+
+    def _hidden(self):
+        """A format that hides a marker visually but keeps it selectable."""
+        f = QTextCharFormat()
+        f.setFontPointSize(1)
+        f.setForeground(QColor(0, 0, 0, 0))
+        return f
+
+    def _marker_fmt(self, block_is_active):
+        """Format for a Markdown marker. Hidden if block not active, else
+        shown in a dim color."""
+        if not block_is_active:
+            return self._hidden()
+        f = QTextCharFormat()
+        f.setForeground(QColor("#888888"))
+        return f
+
+    # -- main ---------------------------------------------------------
+    def highlightBlock(self, text):
+        base = self._base_size()
+        block = self.currentBlock()
+        block_pos = block.position()
+        block_len = block.length()
+
+        # Is the cursor inside this block?  If yes, show markers.
+        active = block_pos <= self._cursor_pos < block_pos + block_len
+
+        # ---- Headings ------------------------------------------------
+        m = re.match(r"^(#{1,6})\s", text)
+        if m:
+            level = len(m.group(1))
+            heading_size = base * HEADING_SCALE[level]
+            # Marker format for the `###` prefix
+            self.setFormat(0, len(m.group(1)),
+                           self._marker_fmt(active))
+            # Space after heading marker: hide
+            self.setFormat(len(m.group(1)), 1, self._hidden())
+            # The heading text
+            self.setFormat(len(m.group(0)), len(text) - len(m.group(0)),
+                           self._fmt(bold=True, size=heading_size,
+                                     color="#569cd6"))
+            return  # headings don't need inline processing
+
+        # ---- Code fence lines ----------------------------------------
+        if text.strip().startswith("```"):
+            self.setFormat(0, len(text), self._fmt(mono=True, color="#4ec9b0"))
+            return
+
+        # ---- Horizontal rule -----------------------------------------
+        if re.fullmatch(r"\s*(---+|\*\*\*+|___+)\s*", text):
+            self.setFormat(0, len(text), self._fmt(color="#555555"))
+            return
+
+        # ---- Lists ---------------------------------------------------
+        lm = re.match(r"^(\s*)([-*+]|\d+\.)\s", text)
+        if lm:
+            self.setFormat(0, len(lm.group(0)),
+                           self._fmt(bold=True, color="#dcdcaa"))
+
+        # ---- Blockquote ---------------------------------------------
+        if text.lstrip().startswith(">"):
+            self.setFormat(0, len(text), self._fmt(italic=True, color="#6a9955"))
+
+        # ---- Inline bold / italic / code / links / strike -----------
+        self._highlight_inline(text, active)
+
+    def _highlight_inline(self, text, active):
+        base = self._base_size()
+
+        # Order matters: triple before double before single
+        # Bold + italic ***x***
+        self._apply_pairs(text, "***", active,
+                          self._fmt(bold=True, italic=True, color="#ce9178"))
+
+        # Bold **x** / __x__
+        self._apply_pairs(text, "**", active,
+                          self._fmt(bold=True, color="#ce9178"))
+        self._apply_pairs(text, "__", active,
+                          self._fmt(bold=True, color="#ce9178"))
+
+        # Italic *x* / _x_  (guard against touching bold ranges)
+        self._apply_italic_single(text, "*", active)
+        self._apply_italic_single(text, "_", active)
+
+        # Strikethrough ~~x~~
+        self._apply_pairs(text, "~~", active,
+                          self._fmt(strike=True, color="#808080"))
+
+        # Inline code `x`
+        self._apply_code_span(text, active)
+
+        # Links [text](url)
+        for m in re.finditer(r"\[([^\]]+)\]\(([^)]+)\)", text):
+            text_start = m.start() + 1
+            text_len = len(m.group(1))
+            # Bracket + text: rendered as link
+            self.setFormat(m.start(), 1, self._marker_fmt(active))
+            self.setFormat(text_start, text_len,
+                           self._fmt(color="#4fc1ff", underline=True))
+            # `](url)` part
+            tail_start = text_start + text_len
+            tail_len = m.end() - tail_start
+            self.setFormat(tail_start, tail_len, self._marker_fmt(active))
+
+    def _apply_pairs(self, text, marker, active, content_fmt):
+        """Format `marker content marker` spans, marker hidden/highlighted."""
+        ml = len(marker)
+        i = 0
+        while True:
+            start = text.find(marker, i)
+            if start == -1:
+                return
+            end = text.find(marker, start + ml)
+            if end == -1:
+                return
+            # Skip if this is actually a longer run (e.g. *** matched by **)
+            # — allow but reduce by checking length
+            inner_start = start + ml
+            inner_len = end - inner_start
+            if inner_len <= 0:
+                i = end + ml
+                continue
+            self.setFormat(start, ml, self._marker_fmt(active))
+            self.setFormat(inner_start, inner_len, content_fmt)
+            self.setFormat(end, ml, self._marker_fmt(active))
+            i = end + ml
+
+    def _apply_italic_single(self, text, marker, active):
+        # Only single occurrences not part of a double
+        m1 = len(marker)
+        i = 0
+        while True:
+            start = text.find(marker, i)
+            if start == -1:
+                return
+            # Not part of "**" or "__" or "***"
+            prev = text[start - 1] if start > 0 else ""
+            nxt = text[start + 1] if start + 1 < len(text) else ""
+            if prev == marker or nxt == marker:
+                i = start + 1
+                continue
+            end = text.find(marker, start + m1)
+            if end == -1:
+                return
+            # Skip if closing char part of a double
+            prev2 = text[end - 1] if end > 0 else ""
+            nxt2 = text[end + 1] if end + 1 < len(text) else ""
+            if prev2 == marker and end - 1 != start:
+                i = end + 1
+                continue
+            if nxt2 == marker:
+                i = end + 1
+                continue
+            # Word boundary safety for `_` (don't italicize snake_case)
+            if marker == "_":
+                prev_ch = text[start - 1] if start > 0 else " "
+                next_ch = text[end + 1] if end + 1 < len(text) else " "
+                if prev_ch.isalnum() or next_ch.isalnum():
+                    i = end + 1
+                    continue
+            inner_len = end - (start + m1)
+            if inner_len > 0:
+                self.setFormat(start, m1, self._marker_fmt(active))
+                self.setFormat(start + m1, inner_len,
+                               self._fmt(italic=True, color="#c586c0"))
+                self.setFormat(end, m1, self._marker_fmt(active))
+            i = end + m1
+
+    def _apply_code_span(self, text, active):
+        i = 0
+        while True:
+            start = text.find("`", i)
+            if start == -1:
+                return
+            # Skip triple backticks
+            if text.startswith("```", start):
+                i = start + 3
+                continue
+            end = text.find("`", start + 1)
+            if end == -1:
+                return
+            if end == start + 1:  # empty ``
+                i = end + 1
+                continue
+            self.setFormat(start, 1, self._marker_fmt(active))
+            self.setFormat(start + 1, end - start - 1,
+                           self._fmt(mono=True, color="#4ec9b0"))
+            self.setFormat(end, 1, self._marker_fmt(active))
+            i = end + 1
+
+
+# ----------------------------------------------------------------------
+# Main window
+# ----------------------------------------------------------------------
+DEFAULT_SETTINGS = {
+    "appearance": {
+        "background_color": "#ffffff",
+        "text_color": "#1e1e1e",
+        "dark_mode": {
+            "background_color": "#1e1e1e",
+            "text_color": "#d4d4d4",
+        },
+    },
+    "text": {
+        "default_font": "Menlo" if sys.platform == "darwin" else "Consolas",
+        "default_font_size": 14,
+        "min_font_size": 8,
+        "max_font_size": 72,
+        "font_size_step": 2,
+    },
+    "layout": {"top_margin": 60, "left_margin": 80},
+}
+
+
+class FocusSpace(QMainWindow):
     def __init__(self):
         super().__init__()
-        
-        # Load settings
-        self.settings = self.load_settings()
-        
-        # Initialize dark mode state
-        self.is_dark_mode = False
-        
-        # Get system fonts
-        self.available_fonts = sorted(font.families())
-        
-        # Configure window
-        self.title("Focus Empty Space Writer")
-        self.geometry("800x600")
-        
-        # Set application icon
-        icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icon.ico')
-        if os.path.exists(icon_path):
-            self.iconbitmap(icon_path)
-        
-        # Set appearance mode and theme
-        ctk.set_appearance_mode("light")
-        ctk.set_default_color_theme("blue")
-        
-        # Set background color
-        self.configure(fg_color=self.settings["appearance"]["background_color"])
-        
-        # Create main container
-        self.main_container = ctk.CTkFrame(self, fg_color=self.settings["appearance"]["background_color"])
-        self.main_container.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # Create menu frame (initially hidden)
-        self.menu_frame = ctk.CTkFrame(
-            self.main_container, 
-            height=self.settings["layout"]["menu_height"],
-            fg_color=self.settings["appearance"]["background_color"]
-        )
-        self.menu_frame.place(x=0, y=0, relwidth=1.0)  # Place at the top
-        
-        # Add file menu buttons
-        self.open_button = ctk.CTkButton(
-            self.menu_frame,
-            text="Open (Ctrl+O)",
-            command=self.open_file,
-            width=100,
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            hover_color=self.settings["appearance"]["button_hover_color"]
-        )
-        self.open_button.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.save_button = ctk.CTkButton(
-            self.menu_frame,
-            text="Save (Ctrl+S)",
-            command=self.save_file,
-            width=100,
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            hover_color=self.settings["appearance"]["button_hover_color"]
-        )
-        self.save_button.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        # Font selection combobox
-        self.font_label = ctk.CTkLabel(
-            self.menu_frame,
-            text="Font:",
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            text_color=self.settings["appearance"]["text_color"]
-        )
-        self.font_label.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.font_combobox = ctk.CTkComboBox(
-            self.menu_frame,
-            values=self.available_fonts,
-            command=self.change_font,
-            width=150,
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            dropdown_font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            button_color=self.settings["appearance"]["background_color"],
-            button_hover_color=self.settings["appearance"]["button_hover_color"]
-        )
-        # Set default font if it exists in system fonts, otherwise use the first available font
-        if self.settings["text"]["default_font"] in self.available_fonts:
-            self.font_combobox.set(self.settings["text"]["default_font"])
-        else:
-            self.font_combobox.set(self.available_fonts[0])
-        self.font_combobox.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        # Font size controls in the same row
+        self.settings = self._load_settings()
         self.font_size = self.settings["text"]["default_font_size"]
-        self.font_size_label = ctk.CTkLabel(
-            self.menu_frame, 
-            text=f"Font Size: {self.font_size}",
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            text_color=self.settings["appearance"]["text_color"]
-        )
-        self.font_size_label.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.decrease_font = ctk.CTkButton(
-            self.menu_frame,
-            text="-",
-            width=30,
-            command=self.decrease_font_size,
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            hover_color=self.settings["appearance"]["button_hover_color"]
-        )
-        self.decrease_font.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.increase_font = ctk.CTkButton(
-            self.menu_frame,
-            text="+",
-            width=30,
-            command=self.increase_font_size,
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            hover_color=self.settings["appearance"]["button_hover_color"]
-        )
-        self.increase_font.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        # Add margin control buttons
-        self.top_margin_label = ctk.CTkLabel(
-            self.menu_frame,
-            text=f"Top Margin: {self.settings['layout']['top_margin']}px",
-            width=120,
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            text_color=self.settings["appearance"]["text_color"]
-        )
-        self.top_margin_label.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.decrease_top_margin_btn = ctk.CTkButton(
-            self.menu_frame,
-            text="-",
-            width=30,
-            command=self.decrease_top_margin_func,
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            hover_color=self.settings["appearance"]["button_hover_color"],
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"])
-        )
-        self.decrease_top_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.increase_top_margin_btn = ctk.CTkButton(
-            self.menu_frame,
-            text="+",
-            width=30,
-            command=self.increase_top_margin_func,
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            hover_color=self.settings["appearance"]["button_hover_color"],
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"])
-        )
-        self.increase_top_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.left_margin_label = ctk.CTkLabel(
-            self.menu_frame,
-            text=f"Left Margin: {self.settings['layout']['left_margin']}px",
-            width=120,
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"]),
-            text_color=self.settings["appearance"]["text_color"]
-        )
-        self.left_margin_label.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.decrease_left_margin_btn = ctk.CTkButton(
-            self.menu_frame,
-            text="-",
-            width=30,
-            command=self.decrease_left_margin_func,
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            hover_color=self.settings["appearance"]["button_hover_color"],
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"])
-        )
-        self.decrease_left_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        self.increase_left_margin_btn = ctk.CTkButton(
-            self.menu_frame,
-            text="+",
-            width=30,
-            command=self.increase_left_margin_func,
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"],
-            hover_color=self.settings["appearance"]["button_hover_color"],
-            font=(self.settings["text"]["default_font"], self.settings["text"]["button_font_size"])
-        )
-        self.increase_left_margin_btn.pack(side="left", padx=self.settings["layout"]["menu_padding"])
-        
-        # Create text widget with margins
-        self.text_widget = ctk.CTkTextbox(
-            self.main_container,
-            wrap="word",
-            font=(self.settings["text"]["default_font"], self.settings["text"]["default_font_size"]),
-            fg_color=self.settings["appearance"]["background_color"],
-            text_color=self.settings["appearance"]["text_color"]
-        )
-        self.text_widget.pack(fill="both", expand=True, padx=self.settings["layout"]["left_margin"], pady=self.settings["layout"]["top_margin"])
-        
-        # Configure cursor color and blink rate using the underlying Tkinter text widget
-        self.text_widget._textbox.configure(
-            insertbackground=self.settings["appearance"]["cursor_color"],
-            insertontime=self.settings["appearance"]["cursor_blink_on_time"],
-            insertofftime=self.settings["appearance"]["cursor_blink_off_time"],
-            insertwidth=self.settings["appearance"]["cursor_width"]
-        )
-        
-        # Current file path
+        self.font_family = self.settings["text"]["default_font"]
         self.current_file = None
-        
-        # Bind keyboard shortcuts
-        self.bind(self.settings["shortcuts"]["open_file"], lambda e: self.open_file())
-        self.bind(self.settings["shortcuts"]["save_file"], lambda e: self.save_file())
-        self.bind(self.settings["shortcuts"]["toggle_fullscreen"], self.toggle_fullscreen)
-        self.bind(self.settings["shortcuts"]["increase_font"], lambda e: self.increase_font_size())
-        self.bind(self.settings["shortcuts"]["decrease_font"], lambda e: self.decrease_font_size())
-        self.bind(self.settings["shortcuts"]["increase_top_margin"], lambda e: self.increase_top_margin_func())
-        self.bind(self.settings["shortcuts"]["decrease_top_margin"], lambda e: self.decrease_top_margin_func())
-        self.bind(self.settings["shortcuts"]["increase_left_margin"], lambda e: self.increase_left_margin_func())
-        self.bind(self.settings["shortcuts"]["decrease_left_margin"], lambda e: self.decrease_left_margin_func())
-        self.bind(self.settings["shortcuts"]["toggle_dark_mode"], lambda e: self.toggle_dark_mode())
-        
-        # Bind mouse events for showing/hiding controls
-        self.bind("<Motion>", self.handle_mouse_motion)
-        self.text_widget.bind("<Motion>", self.handle_mouse_motion)
-        
-        # Initially hide the controls
-        self.menu_frame.place_forget()
-        
-        # Start in fullscreen mode
-        self.attributes("-fullscreen", True)
-        
-    def load_settings(self):
-        """Load settings from settings.json file."""
+        self.is_dark_mode = True
+
+        self.setWindowTitle("Focus Empty Space Writer")
+        self.resize(900, 650)
+
+        central = QWidget()
+        self.setCentralWidget(central)
+        layout = QVBoxLayout(central)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Single editable pane
+        self.editor = QTextEdit()
+        self.editor.setAcceptRichText(False)          # plain text under the hood
+        self.editor.setLineWrapMode(QTextEdit.WidgetWidth)
+        layout.addWidget(self.editor)
+
+        # Highlighter
+        self.highlighter = LiveMarkdownHighlighter(self.editor.document(), self)
+
+        # Debounced repaint to avoid thrash while typing — MUST exist
+        # before _on_cursor_moved() is ever called.
+        self._repaint_timer = QTimer(self)
+        self._repaint_timer.setSingleShot(True)
+        self._repaint_timer.setInterval(30)
+        self._repaint_timer.timeout.connect(self.highlighter.rehighlight)
+
+        # Keep highlighter informed of cursor position
+        self.editor.cursorPositionChanged.connect(self._on_cursor_moved)
+        self._on_cursor_moved()
+
+        self._build_menus()
+        self._apply_theme()
+        self._apply_margins()
+
+        self.showFullScreen()
+
+    # ---- settings ----------------------------------------------------
+    def _load_settings(self):
+        path = os.path.join(os.path.dirname(__file__), "settings.json")
         try:
-            with open(os.path.join(os.path.dirname(__file__), "settings.json"), "r") as f:
-                return json.load(f)
-        except Exception as e:
-            messagebox.showerror("Error", f"Could not load settings: {str(e)}")
-            return {}
-            
-    def handle_mouse_motion(self, event):
-        """Show/hide controls based on mouse position."""
-        if event.y < 50:  # If mouse is near the top
-            self.menu_frame.place(x=0, y=0, relwidth=1.0)
+            with open(path, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            merged = json.loads(json.dumps(DEFAULT_SETTINGS))
+            for section, values in loaded.items():
+                if isinstance(values, dict) and isinstance(merged.get(section), dict):
+                    merged[section].update(values)
+                else:
+                    merged[section] = values
+            return merged
+        except Exception:
+            return json.loads(json.dumps(DEFAULT_SETTINGS))
+
+    # ---- cursor / repaint -------------------------------------------
+    def _on_cursor_moved(self):
+        self.highlighter.set_cursor_position(self.editor.textCursor().position())
+        self._repaint_timer.start()
+
+    # ---- margins -----------------------------------------------------
+    def _apply_margins(self):
+        t = self.settings["layout"]["top_margin"]
+        l = self.settings["layout"]["left_margin"]
+        self.editor.setViewportMargins(l, t, l, t)
+
+    # ---- menus -------------------------------------------------------
+    def _build_menus(self):
+        mb = self.menuBar()
+        mb.setNativeMenuBar(True)
+
+        # File
+        fm = mb.addMenu("File")
+        self._add(fm, "Open…", "Ctrl+O", self.open_file)
+        self._add(fm, "Save", "Ctrl+S", self.save_file)
+        self._add(fm, "Save As…", "Ctrl+Shift+S", self.save_file_as)
+        fm.addSeparator()
+        self._add(fm, "Quit", "Ctrl+Q", self.close)
+
+        # Edit
+        em = mb.addMenu("Edit")
+        self._add(em, "Undo", "Ctrl+Z", self.editor.undo)
+        self._add(em, "Redo", "Ctrl+Shift+Z", self.editor.redo)
+        em.addSeparator()
+        self._add(em, "Cut", "Ctrl+X", self.editor.cut)
+        self._add(em, "Copy", "Ctrl+C", self.editor.copy)
+        self._add(em, "Paste", "Ctrl+V", self.editor.paste)
+        self._add(em, "Select All", "Ctrl+A", self.editor.selectAll)
+
+        # Format
+        fmt = mb.addMenu("Format")
+        self._add(fmt, "Bold", "Ctrl+B", lambda: self._wrap("**"))
+        self._add(fmt, "Italic", "Ctrl+I", lambda: self._wrap("*"))
+        self._add(fmt, "Inline Code", "Ctrl+`", lambda: self._wrap("`"))
+        self._add(fmt, "Strikethrough", "Ctrl+Shift+X", lambda: self._wrap("~~"))
+        fmt.addSeparator()
+        self._add(fmt, "Heading 1", "Ctrl+1", lambda: self._apply_heading(1))
+        self._add(fmt, "Heading 2", "Ctrl+2", lambda: self._apply_heading(2))
+        self._add(fmt, "Heading 3", "Ctrl+3", lambda: self._apply_heading(3))
+        self._add(fmt, "Body", "Ctrl+0", lambda: self._apply_heading(0))
+
+        # View
+        vm = mb.addMenu("View")
+        self._add(vm, "Toggle Fullscreen", "F11", self._toggle_fullscreen)
+
+        self.dark_act = QAction("Dark Mode", self, checkable=True)
+        self.dark_act.setChecked(self.is_dark_mode)
+        self.dark_act.setShortcut(QKeySequence("Ctrl+D"))
+        self.dark_act.triggered.connect(self._toggle_dark)
+        vm.addAction(self.dark_act)
+
+        vm.addSeparator()
+
+        # Font submenu
+        fmenu = vm.addMenu("Font")
+        group = QActionGroup(self)
+        group.setExclusive(True)
+        for family in sorted(QFontDatabase.families()):
+            act = QAction(family, self, checkable=True)
+            act.setChecked(family == self.font_family)
+            act.triggered.connect(lambda _=False, f=family: self._set_font(f))
+            group.addAction(act)
+            fmenu.addAction(act)
+        self._font_group = group
+
+        # Font size submenu
+        smenu = vm.addMenu("Font Size")
+        self._add(smenu, "Increase", "Ctrl+=", self._increase_font)
+        self._add(smenu, "Decrease", "Ctrl+-", self._decrease_font)
+        smenu.addSeparator()
+        sgroup = QActionGroup(self)
+        sgroup.setExclusive(True)
+        for size in (10, 12, 14, 16, 18, 20, 24, 28, 32):
+            act = QAction(f"{size} pt", self, checkable=True)
+            act.setChecked(size == self.font_size)
+            act.triggered.connect(lambda _=False, s=size: self._set_font_size(s))
+            sgroup.addAction(act)
+            smenu.addAction(act)
+        self._size_group = sgroup
+
+        # Margins submenu
+        mm = vm.addMenu("Margins")
+        self._add(mm, "Increase Top", "Ctrl+Up", lambda: self._nudge_margin("top", +10))
+        self._add(mm, "Decrease Top", "Ctrl+Down", lambda: self._nudge_margin("top", -10))
+        self._add(mm, "Increase Left", "Ctrl+Right", lambda: self._nudge_margin("left", +10))
+        self._add(mm, "Decrease Left", "Ctrl+Left", lambda: self._nudge_margin("left", -10))
+
+        # Help
+        hm = mb.addMenu("Help")
+        self._add(hm, "About", None, self._about)
+
+    def _add(self, menu, text, shortcut, callback):
+        act = QAction(text, self)
+        if shortcut:
+            act.setShortcut(QKeySequence(shortcut))
+        act.triggered.connect(callback)
+        menu.addAction(act)
+        return act
+
+    # ---- formatting --------------------------------------------------
+    def _wrap(self, marker):
+        cursor = self.editor.textCursor()
+        if not cursor.hasSelection():
+            cursor.insertText(marker + marker)
+            cursor.movePosition(QTextCursor.PreviousCharacter)
+            self.editor.setTextCursor(cursor)
         else:
-            self.menu_frame.place_forget()
-        
-    def open_file(self):
-        """Open a markdown file and display its contents."""
-        file_path = filedialog.askopenfilename(
-            defaultextension=".md",
-            filetypes=[("Markdown files", "*.md"), ("All files", "*.*")]
-        )
-        
-        if file_path:
-            try:
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    content = file.read()
-                    self.text_widget.delete('1.0', 'end')
-                    self.text_widget.insert('1.0', content)
-                    self.current_file = file_path
-                    self.title(f"Empty Focus Space - {os.path.basename(file_path)}")
-            except Exception as e:
-                messagebox.showerror("Error", f"Could not open file: {str(e)}")
-    
-    def save_file(self):
-        """Save the current content as a markdown file."""
-        if not self.current_file:
-            file_path = filedialog.asksaveasfilename(
-                defaultextension=".md",
-                filetypes=[("Markdown files", "*.md"), ("All files", "*.*")]
-            )
-            if not file_path:
-                return
-            self.current_file = file_path
-        
-        try:
-            content = self.text_widget.get('1.0', 'end-1c')
-            with open(self.current_file, 'w', encoding='utf-8') as file:
-                file.write(content)
-            self.title(f"Empty Focus Space - {os.path.basename(self.current_file)}")
-        except Exception as e:
-            messagebox.showerror("Error", f"Could not save file: {str(e)}")
-            
-    def change_font(self, choice):
-        """Change the font of the text widget."""
-        self.text_widget.configure(font=(choice, self.font_size))
-            
-    def decrease_font_size(self):
-        """Decrease the font size of the text widget."""
-        if self.font_size > self.settings["text"]["min_font_size"]:
-            self.font_size -= self.settings["text"]["font_size_step"]
-            self.update_font_size()
-            
-    def increase_font_size(self):
-        """Increase the font size of the text widget."""
-        if self.font_size < self.settings["text"]["max_font_size"]:
-            self.font_size += self.settings["text"]["font_size_step"]
-            self.update_font_size()
-            
-    def update_font_size(self):
-        """Update the font size of the text widget and the label."""
-        current_font = self.font_combobox.get()
-        self.text_widget.configure(font=(current_font, self.font_size))
-        self.font_size_label.configure(text=f"Font Size: {self.font_size}")
-        
-    def increase_top_margin_func(self):
-        """Increase the top margin"""
-        self.settings["layout"]["top_margin"] += 10
-        self.update_margins()
-        
-    def decrease_top_margin_func(self):
-        """Decrease the top margin"""
-        if self.settings["layout"]["top_margin"] > 10:
-            self.settings["layout"]["top_margin"] -= 10
-            self.update_margins()
-            
-    def increase_left_margin_func(self):
-        """Increase the left margin"""
-        self.settings["layout"]["left_margin"] += 10
-        self.update_margins()
-        
-    def decrease_left_margin_func(self):
-        """Decrease the left margin"""
-        if self.settings["layout"]["left_margin"] > 10:
-            self.settings["layout"]["left_margin"] -= 10
-            self.update_margins()
-            
-    def update_margins(self):
-        """Update the text widget margins and labels"""
-        self.text_widget.pack_configure(
-            padx=self.settings["layout"]["left_margin"],
-            pady=self.settings["layout"]["top_margin"]
-        )
-        self.top_margin_label.configure(text=f"Top Margin: {self.settings['layout']['top_margin']}px")
-        self.left_margin_label.configure(text=f"Left Margin: {self.settings['layout']['left_margin']}px")
-        
-    def toggle_fullscreen(self, event=None):
-        """Toggle fullscreen mode."""
-        self.attributes("-fullscreen", not self.attributes("-fullscreen"))
-        
-    def toggle_dark_mode(self):
-        """Toggle between light and dark mode."""
-        self.is_dark_mode = not self.is_dark_mode
-        
+            sel = cursor.selectedText()
+            if sel.startswith(marker) and sel.endswith(marker):
+                cursor.insertText(sel[len(marker):-len(marker)])
+            else:
+                cursor.insertText(f"{marker}{sel}{marker}")
+        self._on_cursor_moved()
+
+    def _apply_heading(self, level):
+        cursor = self.editor.textCursor()
+        cursor.movePosition(QTextCursor.StartOfBlock)
+        cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+        text = cursor.selectedText()
+        # Strip existing heading
+        text = re.sub(r"^#{1,6}\s+", "", text)
+        if level > 0:
+            text = "#" * level + " " + text
+        cursor.insertText(text)
+        self._on_cursor_moved()
+
+    # ---- font/size ---------------------------------------------------
+    def _set_font(self, family):
+        self.font_family = family
+        f = QFont(family, self.font_size)
+        self.editor.setFont(f)
+        self.highlighter.rehighlight()
+
+    def _set_font_size(self, size):
+        size = max(self.settings["text"]["min_font_size"],
+                   min(self.settings["text"]["max_font_size"], size))
+        self.font_size = size
+        f = QFont(self.font_family, self.font_size)
+        self.editor.setFont(f)
+        for act in self._size_group.actions():
+            act.setChecked(act.text() == f"{size} pt")
+        self.highlighter.rehighlight()
+
+    def _increase_font(self):
+        self._set_font_size(self.font_size + self.settings["text"]["font_size_step"])
+
+    def _decrease_font(self):
+        self._set_font_size(self.font_size - self.settings["text"]["font_size_step"])
+
+    # ---- margins -----------------------------------------------------
+    def _nudge_margin(self, side, delta):
+        key = "top_margin" if side == "top" else "left_margin"
+        self.settings["layout"][key] = max(10, self.settings["layout"][key] + delta)
+        self._apply_margins()
+
+    # ---- theme -------------------------------------------------------
+    def _toggle_dark(self):
+        self.is_dark_mode = self.dark_act.isChecked()
+        self._apply_theme()
+
+    def _apply_theme(self):
+        dark = self.settings["appearance"]["dark_mode"]
+        light = self.settings["appearance"]
         if self.is_dark_mode:
-            # Apply dark mode colors
-            self.configure(fg_color=self.settings["appearance"]["dark_mode"]["background_color"])
-            self.main_container.configure(fg_color=self.settings["appearance"]["dark_mode"]["background_color"])
-            self.menu_frame.configure(fg_color=self.settings["appearance"]["dark_mode"]["background_color"])
-            self.text_widget.configure(
-                fg_color=self.settings["appearance"]["dark_mode"]["background_color"],
-                text_color=self.settings["appearance"]["dark_mode"]["text_color"]
-            )
-            
-            # Update all widgets in menu frame
-            for widget in self.menu_frame.winfo_children():
-                if isinstance(widget, ctk.CTkLabel):
-                    widget.configure(
-                        fg_color=self.settings["appearance"]["dark_mode"]["background_color"],
-                        text_color=self.settings["appearance"]["dark_mode"]["text_color"]
-                    )
-                elif isinstance(widget, ctk.CTkButton):
-                    widget.configure(
-                        fg_color=self.settings["appearance"]["dark_mode"]["background_color"],
-                        text_color=self.settings["appearance"]["dark_mode"]["text_color"],
-                        hover_color=self.settings["appearance"]["dark_mode"]["button_hover_color"]
-                    )
-                elif isinstance(widget, ctk.CTkComboBox):
-                    widget.configure(
-                        fg_color=self.settings["appearance"]["dark_mode"]["background_color"],
-                        text_color=self.settings["appearance"]["dark_mode"]["text_color"],
-                        button_color=self.settings["appearance"]["dark_mode"]["background_color"],
-                        button_hover_color=self.settings["appearance"]["dark_mode"]["button_hover_color"],
-                        dropdown_fg_color=self.settings["appearance"]["dark_mode"]["background_color"],
-                        dropdown_text_color=self.settings["appearance"]["dark_mode"]["text_color"],
-                        dropdown_hover_color=self.settings["appearance"]["dark_mode"]["button_hover_color"]
-                    )
+            bg, fg = dark["background_color"], dark["text_color"]
         else:
-            # Apply light mode colors
-            self.configure(fg_color=self.settings["appearance"]["background_color"])
-            self.main_container.configure(fg_color=self.settings["appearance"]["background_color"])
-            self.menu_frame.configure(fg_color=self.settings["appearance"]["background_color"])
-            self.text_widget.configure(
-                fg_color=self.settings["appearance"]["background_color"],
-                text_color=self.settings["appearance"]["text_color"]
-            )
-            
-            # Update all widgets in menu frame
-            for widget in self.menu_frame.winfo_children():
-                if isinstance(widget, ctk.CTkLabel):
-                    widget.configure(
-                        fg_color=self.settings["appearance"]["background_color"],
-                        text_color=self.settings["appearance"]["text_color"]
-                    )
-                elif isinstance(widget, ctk.CTkButton):
-                    widget.configure(
-                        fg_color=self.settings["appearance"]["background_color"],
-                        text_color=self.settings["appearance"]["text_color"],
-                        hover_color=self.settings["appearance"]["button_hover_color"]
-                    )
-                elif isinstance(widget, ctk.CTkComboBox):
-                    widget.configure(
-                        fg_color=self.settings["appearance"]["background_color"],
-                        text_color=self.settings["appearance"]["text_color"],
-                        button_color=self.settings["appearance"]["background_color"],
-                        button_hover_color=self.settings["appearance"]["button_hover_color"],
-                        dropdown_fg_color=self.settings["appearance"]["background_color"],
-                        dropdown_text_color=self.settings["appearance"]["text_color"],
-                        dropdown_hover_color=self.settings["appearance"]["button_hover_color"]
-                    ) 
+            bg, fg = light["background_color"], light["text_color"]
+
+        self.setStyleSheet(f"""
+            QMainWindow, QWidget {{ background: {bg}; color: {fg}; }}
+            QMenuBar {{ background: {bg}; color: {fg}; }}
+            QMenu {{ background: {bg}; color: {fg}; }}
+            QTextEdit {{
+                background: {bg}; color: {fg}; border: none;
+                selection-background-color: #264f78;
+            }}
+        """)
+        self.editor.setFont(QFont(self.font_family, self.font_size))
+        self.highlighter.rehighlight()
+
+    # ---- fullscreen --------------------------------------------------
+    def _toggle_fullscreen(self):
+        self.showNormal() if self.isFullScreen() else self.showFullScreen()
+
+    # ---- file I/O ----------------------------------------------------
+    def open_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open Markdown", "", "Markdown (*.md *.markdown);;All (*)")
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                self.editor.setPlainText(f.read())
+            self.current_file = path
+            self.setWindowTitle(f"Empty Focus Space — {os.path.basename(path)}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+    def save_file(self):
+        if not self.current_file:
+            self.save_file_as()
+            return
+        try:
+            with open(self.current_file, "w", encoding="utf-8") as f:
+                f.write(self.editor.toPlainText())
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+    def save_file_as(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Markdown", "", "Markdown (*.md);;All (*)")
+        if not path:
+            return
+        self.current_file = path
+        self.save_file()
+
+    def _about(self):
+        QMessageBox.about(self, "Focus Empty Space Writer",
+                          "Live-preview Markdown editor.\n"
+                          "One pane — markers are hidden while you type "
+                          "and appear when your cursor is on them.")
+
