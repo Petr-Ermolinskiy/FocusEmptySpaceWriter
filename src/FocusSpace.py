@@ -1,7 +1,8 @@
+import json
 import os
 import re
 import sys
-import json
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import (
     QAction,
@@ -20,8 +21,8 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QTextEdit,
-    QWidget,
     QVBoxLayout,
+    QWidget,
 )
 
 
