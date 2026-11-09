@@ -377,6 +377,17 @@ class FocusSpace(QMainWindow):
         self._add(fmt, "Heading 3", "Ctrl+3", lambda: self._apply_heading(3))
         self._add(fmt, "Body", "Ctrl+0", lambda: self._apply_heading(0))
 
+        # ---- Table of Contents (TOP-LEVEL) ----
+        self.toc_menu = mb.addMenu("Table of Contents")
+        self.toc_menu.aboutToShow.connect(self._populate_toc)
+        self._populate_toc()
+
+        # Shortcut action — QMenu has no setShortcut, so use a QAction
+        self.toc_shortcut_act = QAction("Show Table of Contents", self)
+        self.toc_shortcut_act.setShortcut(QKeySequence("Ctrl+Shift+O"))
+        self.toc_shortcut_act.triggered.connect(self._show_toc_popup)
+        self.addAction(self.toc_shortcut_act)
+
         # ---- View ----
         vm = mb.addMenu("View")
         self._add(vm, "Toggle Fullscreen", "F11", self._toggle_fullscreen)
@@ -386,19 +397,6 @@ class FocusSpace(QMainWindow):
         self.dark_act.setShortcut(QKeySequence("Ctrl+D"))
         self.dark_act.triggered.connect(self._toggle_dark)
         vm.addAction(self.dark_act)
-
-        vm.addSeparator()
-
-        # ---- Table of Contents submenu ----
-        self.toc_menu = vm.addMenu("Table of Contents")
-        self.toc_menu.aboutToShow.connect(self._populate_toc)
-
-        # A separate action with the shortcut. It opens the TOC as a popup
-        # at the cursor so Ctrl+Shift+O works even without the menu bar.
-        self.toc_shortcut_act = QAction("Show Table of Contents", self)
-        self.toc_shortcut_act.setShortcut(QKeySequence("Ctrl+Shift+O"))
-        self.toc_shortcut_act.triggered.connect(self._show_toc_popup)
-        self.addAction(self.toc_shortcut_act)
 
         vm.addSeparator()
 
