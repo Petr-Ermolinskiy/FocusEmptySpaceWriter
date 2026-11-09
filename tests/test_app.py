@@ -57,6 +57,13 @@ class TestApp(unittest.TestCase):
         headings = self.app._scan_headings()
         self.assertEqual([h[1] for h in headings], ["Title", "Section"])
 
+    def test_heading_settings(self):
+        """Test that heading color and scale are loaded from settings."""
+        headings = self.app.settings["headings"]
+        self.assertEqual(headings["color"], "black")
+        self.assertEqual(headings["scale"]["1"], 1.9)
+        self.assertEqual(headings["scale"]["6"], 1.0)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -26,12 +26,6 @@ from PySide6.QtWidgets import (
 
 
 # ----------------------------------------------------------------------
-# Helpers
-# ----------------------------------------------------------------------
-HEADING_SCALE = {1: 1.9, 2: 1.55, 3: 1.3, 4: 1.15, 5: 1.05, 6: 1.0}
-
-
-# ----------------------------------------------------------------------
 # Live-preview Markdown highlighter
 # ----------------------------------------------------------------------
 class LiveMarkdownHighlighter(QSyntaxHighlighter):
@@ -106,12 +100,13 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
         m = re.match(r"^(#{1,6})\s", text)
         if m:
             level = len(m.group(1))
-            heading_size = base * HEADING_SCALE[level]
+            headings = self.app.settings["headings"]
+            heading_size = base * headings["scale"][str(level)]
             self.setFormat(0, len(m.group(1)), self._marker_fmt(active))
             self.setFormat(len(m.group(1)), 1, self._hidden())
             self.setFormat(len(m.group(0)), len(text) - len(m.group(0)),
                            self._fmt(bold=True, size=heading_size,
-                                     color="#569cd6"))
+                                     color=headings["color"]))
             return
 
         # ---- Code fence lines ----------------------------------------
@@ -264,6 +259,17 @@ DEFAULT_SETTINGS = {
         "min_font_size": 8,
         "max_font_size": 72,
         "font_size_step": 2,
+    },
+    "headings": {
+        "color": "black",
+        "scale": {
+            "1": 1.9,
+            "2": 1.55,
+            "3": 1.3,
+            "4": 1.15,
+            "5": 1.05,
+            "6": 1.0,
+        },
     },
     "layout": {"top_margin": 60, "left_margin": 80},
 }
