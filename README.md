@@ -9,7 +9,6 @@ A distraction-free writing environment built with Python and PySide6.
 - Clean, minimalist interface
 - Customizable margins
 - Font size and family controls
-- Markdown support
 - Fullscreen mode
 - Keyboard shortcuts for quick access to features
 
