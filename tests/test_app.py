@@ -61,8 +61,23 @@ class TestApp(unittest.TestCase):
         """Test that heading color and scale are loaded from settings."""
         headings = self.app.settings["headings"]
         self.assertEqual(headings["color"], "black")
+        self.assertEqual(headings["dark_mode"]["color"], "white")
         self.assertEqual(headings["scale"]["1"], 1.9)
         self.assertEqual(headings["scale"]["6"], 1.0)
+
+    def test_heading_color_follows_theme(self):
+        """Test that heading color switches with the active theme."""
+        self.app.editor.setPlainText("# Title\n")
+
+        self.app.is_dark_mode = True
+        self.app.highlighter.rehighlight()
+        dark_format = self.app.editor.document().firstBlock().layout().formats()[-1]
+        self.assertEqual(dark_format.format.foreground().color().name(), "#ffffff")
+
+        self.app.is_dark_mode = False
+        self.app.highlighter.rehighlight()
+        light_format = self.app.editor.document().firstBlock().layout().formats()[-1]
+        self.assertEqual(light_format.format.foreground().color().name(), "#000000")
 
 
 if __name__ == '__main__':

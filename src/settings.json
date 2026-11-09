@@ -23,6 +23,9 @@
     },
     "headings": {
         "color": "black",
+        "dark_mode": {
+            "color": "white"
+        },
         "scale": {
             "1": 1.9,
             "2": 1.55,

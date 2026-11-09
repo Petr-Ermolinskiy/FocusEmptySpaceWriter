@@ -102,12 +102,15 @@ class LiveMarkdownHighlighter(QSyntaxHighlighter):
         if m:
             level = len(m.group(1))
             headings = self.app.settings["headings"]
+            heading_color = headings["color"]
+            if self.app.is_dark_mode:
+                heading_color = headings["dark_mode"]["color"]
             heading_size = base * headings["scale"][str(level)]
             self.setFormat(0, len(m.group(1)), self._marker_fmt(active))
             self.setFormat(len(m.group(1)), 1, self._hidden())
             self.setFormat(len(m.group(0)), len(text) - len(m.group(0)),
                            self._fmt(bold=True, size=heading_size,
-                                     color=headings["color"]))
+                                     color=heading_color))
             return
 
         # ---- Code fence lines ----------------------------------------
@@ -263,6 +266,9 @@ DEFAULT_SETTINGS = {
     },
     "headings": {
         "color": "black",
+        "dark_mode": {
+            "color": "white",
+        },
         "scale": {
             "1": 1.9,
             "2": 1.55,
