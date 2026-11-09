@@ -1,6 +1,6 @@
 [project]
 name = "focus-emty-space-writer"
-version = "0.1.0"
+version = "1.0.0"
 description = "A minimalistic, distraction-free markdown note-taking application"
 authors = [
     { name = "petr", email = "ermolinskiy.pb15@physics.msu.ru" },
