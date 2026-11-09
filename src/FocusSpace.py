@@ -633,8 +633,14 @@ class FocusSpace(QMainWindow):
         light = self.settings["appearance"]
         if self.is_dark_mode:
             bg, fg = dark["background_color"], dark["text_color"]
+            scroll_handle = "#454545"
+            scroll_handle_hover = "#5e5e5e"
+            scroll_handle_pressed = "#777777"
         else:
             bg, fg = light["background_color"], light["text_color"]
+            scroll_handle = "#c9c9c9"
+            scroll_handle_hover = "#adadad"
+            scroll_handle_pressed = "#929292"
 
         self.setStyleSheet(f"""
             QMainWindow, QWidget {{ background: {bg}; color: {fg}; }}
@@ -643,6 +649,64 @@ class FocusSpace(QMainWindow):
             QTextEdit {{
                 background: {bg}; color: {fg}; border: none;
                 selection-background-color: #264f78;
+            }}
+
+            QScrollBar:vertical {{
+                background: transparent;
+                width: 10px;
+                margin: 4px 2px;
+                border: none;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {scroll_handle};
+                min-height: 28px;
+                border: none;
+                border-radius: 3px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {scroll_handle_hover};
+            }}
+            QScrollBar::handle:vertical:pressed {{
+                background: {scroll_handle_pressed};
+            }}
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {{
+                height: 0px;
+                background: none;
+                border: none;
+            }}
+            QScrollBar::add-page:vertical,
+            QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
+
+            QScrollBar:horizontal {{
+                background: transparent;
+                height: 10px;
+                margin: 2px 4px;
+                border: none;
+            }}
+            QScrollBar::handle:horizontal {{
+                background: {scroll_handle};
+                min-width: 28px;
+                border: none;
+                border-radius: 3px;
+            }}
+            QScrollBar::handle:horizontal:hover {{
+                background: {scroll_handle_hover};
+            }}
+            QScrollBar::handle:horizontal:pressed {{
+                background: {scroll_handle_pressed};
+            }}
+            QScrollBar::add-line:horizontal,
+            QScrollBar::sub-line:horizontal {{
+                width: 0px;
+                background: none;
+                border: none;
+            }}
+            QScrollBar::add-page:horizontal,
+            QScrollBar::sub-page:horizontal {{
+                background: none;
             }}
         """)
         self.editor.setFont(QFont(self.font_family, self.font_size))
