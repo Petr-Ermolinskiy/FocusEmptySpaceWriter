@@ -1,6 +1,6 @@
 # Focus Empty Space Writer
 
-A distraction-free writing environment built with Python and customtkinter.
+A distraction-free writing environment built with Python and PySide6.
 
 ![The window of app](images/window.png)
 
@@ -32,21 +32,21 @@ A distraction-free writing environment built with Python and customtkinter.
 1. Clone the repository
 2. Install dependencies:
    ```bash
-   poetry install
+   uv sync
    ```
 
 ## Usage
 
 You can run the application in two ways:
 
-1. Using Poetry:
+1. Using uv:
    ```bash
-   poetry run focus-emty-space-writer
+   uv run focus-emty-space-writer
    ```
 
 2. Running the Python file directly:
    ```bash
-   poetry run python src/main.py
+   uv run python src/main.py
    ```
 
 ## Building
@@ -54,13 +54,14 @@ You can run the application in two ways:
 To build the application for your platform:
 
   ```bash
-  make build
+  make build_mac   # macOS
+  make build_win   # Windows
   ```
 
 
 ## Development
 
-The project uses Poetry for dependency management. Make sure you have Poetry installed before contributing.
+The project uses uv for dependency management. Make sure you have uv installed before contributing.
 
 ## License
 

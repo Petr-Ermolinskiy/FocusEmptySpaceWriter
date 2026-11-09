@@ -1,55 +1,62 @@
 """
 Test suite for the Focus Empty Space Writer application.
 
-To run the tests using Poetry:
-    poetry run python -m unittest tests/test_app.py
+To run the tests using uv:
+    uv run python -m unittest tests/test_app.py
 """
 
-import unittest
-import sys
 import os
+import sys
+import unittest
 
-# Add the src directory to the Python path
+# Add the project root to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
+# Run Qt headlessly so the tests work in CI and on machines without a display
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtWidgets import QApplication
+
 from src.FocusSpace import FocusSpace
-import customtkinter as ctk
+
 
 class TestApp(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        """Create a single QApplication for the whole test run."""
+        cls.qapp = QApplication.instance() or QApplication([])
+
     def setUp(self):
         """Set up test environment"""
-        self.app = None
+        self.app = FocusSpace()
 
     def tearDown(self):
         """Clean up after test"""
         if self.app:
-            self.app.destroy()
+            self.app.close()
+            self.app.deleteLater()
+            self.qapp.processEvents()
             self.app = None
 
     def test_app_initialization(self):
         """Test if the application can be initialized properly"""
-        # Create the app instance
-        self.app = FocusSpace()
-        
-        # Check if the app was created
         self.assertIsNotNone(self.app, "Application failed to initialize")
-        
-        # Check if the main container exists
-        self.assertTrue(hasattr(self.app, 'main_container'), "Main container not found")
-        self.assertTrue(self.app.main_container.winfo_exists(), "Main container is not properly initialized")
-        
-        # Check if the menu frame exists
-        self.assertTrue(hasattr(self.app, 'menu_frame'), "Menu frame does not exist")
-        self.assertTrue(self.app.menu_frame.winfo_exists(), "Menu frame is not properly initialized")
-        
+        self.assertIsNotNone(self.app.editor, "Editor was not created")
+
         # Check if settings were loaded
         self.assertTrue(hasattr(self.app, 'settings'), "Settings were not loaded")
         self.assertIsInstance(self.app.settings, dict, "Settings is not a dictionary")
-        
-        # Check if fonts were loaded
-        self.assertTrue(hasattr(self.app, 'available_fonts'), "Available fonts were not loaded")
-        self.assertIsInstance(self.app.available_fonts, list, "Available fonts is not a list")
-        self.assertTrue(len(self.app.available_fonts) > 0, "No fonts were loaded")
+
+        # Check if the default font settings were loaded
+        self.assertGreater(self.app.font_size, 0, "Font size was not initialized")
+        self.assertTrue(self.app.font_family, "Font family was not initialized")
+
+    def test_headings_are_detected(self):
+        """Test that the table of contents finds Markdown headings."""
+        self.app.editor.setPlainText("# Title\n\nSome text\n\n## Section\n")
+        headings = self.app._scan_headings()
+        self.assertEqual([h[1] for h in headings], ["Title", "Section"])
+
 
 if __name__ == '__main__':
     unittest.main()

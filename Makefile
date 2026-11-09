@@ -12,30 +12,28 @@ all:
 
 # Run tests
 test:
-	poetry run python -m unittest tests/test_app.py
+	uv run python -m unittest tests/test_app.py
 
 # Windows-specific build
 build_win:
-	poetry run pyinstaller --noconfirm --onefile --windowed \
+	uv run pyinstaller --noconfirm --onefile --windowed \
 		--icon=assets/icon.ico \
 		--name="focus-empty-space-writer" \
 		--add-data="src;src" \
 		--add-data="assets;assets" \
-		--hidden-import=customtkinter \
-		--hidden-import=markdown \
+		--hidden-import=PySide6 \
 		--hidden-import=src.FocusSpace \
 		--paths=. \
 		src/main.py
 
 # macOS-specific build
 build_mac:
-	poetry run pyinstaller --noconfirm --onedir --windowed \
+	uv run pyinstaller --noconfirm --onedir --windowed \
 		--icon=assets/icon.icns \
 		--name="focus-empty-space-writer" \
 		--add-data="src:src" \
 		--add-data="assets:assets" \
-		--hidden-import=customtkinter \
-		--hidden-import=markdown \
+		--hidden-import=PySide6 \
 		--hidden-import=src.FocusSpace \
 		--osx-bundle-identifier="com.yourdomain.focus-empty-space-writer" \
 		--paths=. \
@@ -49,4 +47,4 @@ all_mac: test build_mac clean
 
 # Clean build artifacts
 clean:
-	poetry run python clean.py
+	uv run python clean.py
